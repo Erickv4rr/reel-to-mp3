@@ -1,0 +1,83 @@
+name: Build apps
+
+# Push a tag like v1.0.1 to build the Windows and Mac apps and publish them as a release.
+# "Run workflow" on the Actions tab builds them without publishing (download from the run page).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: Reel-to-MP3-Windows.exe
+          - os: macos-latest
+            asset: Reel-to-MP3-Mac-AppleSilicon.dmg
+          - os: macos-15-intel
+            asset: Reel-to-MP3-Mac-Intel.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -r requirements.txt pyinstaller pillow
+
+      - name: Build
+        run: python build.py
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: mv "dist/Reel to MP3.exe" "dist/${{ matrix.asset }}"
+
+      - name: Package (Mac)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir dmg
+          ditto "dist/Reel to MP3.app" "dmg/Reel to MP3.app"
+          ln -s /Applications dmg/Applications
+          for i in 1 2 3 4 5; do
+            hdiutil create -volname "Reel to MP3" -srcfolder dmg -ov -format UDZO "dist/${{ matrix.asset }}" && break
+            sleep 5
+          done
+          test -f "dist/${{ matrix.asset }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+
+  release:
+    needs: build
+    if: always() && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'EOF'
+          **Windows:** download `Reel-to-MP3-Windows.exe` and double-click it. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+
+          **Mac:** download the `.dmg` for your Mac (Apple menu → About This Mac: **Chip: Apple M…** = AppleSilicon, **Processor: Intel** = Intel). Open it and drag **Reel to MP3** into **Applications**.
+          The first time you open it, macOS will say it can't check it for malware. Click **Done**, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only need to do this once.
+          EOF
+          ls -la out
+          gh release create "${GITHUB_REF_NAME}" out/* --repo "${GITHUB_REPOSITORY}" \
+            --title "Reel to MP3 ${GITHUB_REF_NAME}" --notes-file notes.md
