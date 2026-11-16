@@ -1,6 +1,6 @@
 name: Build apps
 
-# Push a tag like v1.0.1 to build the Windows and Mac apps and publish them as a release.
+# Push a tag like v1.2.0 (matching version.py) to build the Windows and Mac apps and publish a release.
 # "Run workflow" on the Actions tab builds them without publishing (download from the run page).
 on:
   push:
@@ -17,11 +17,13 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            asset: Reel-to-MP3-Windows.exe
+            name: windows
           - os: macos-latest
-            asset: Reel-to-MP3-Mac-AppleSilicon.dmg
+            name: mac-applesilicon
+            dmg: Reel-to-MP3-Mac-AppleSilicon.dmg
           - os: macos-15-intel
-            asset: Reel-to-MP3-Mac-Intel.dmg
+            name: mac-intel
+            dmg: Reel-to-MP3-Mac-Intel.dmg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -30,33 +32,49 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Check tag matches version.py
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          v=$(python -c "from version import __version__; print(__version__)")
+          test "v$v" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} doesn't match version.py ($v)"; exit 1; }
+
       - name: Install
         run: pip install -r requirements.txt pyinstaller pillow
 
-      - name: Build
+      - name: Build app
         run: python build.py
 
-      - name: Package (Windows)
+      - name: Windows installer and portable exe
         if: runner.os == 'Windows'
-        shell: bash
-        run: mv "dist/Reel to MP3.exe" "dist/${{ matrix.asset }}"
+        shell: pwsh
+        run: |
+          $v = python -c "from version import __version__; print(__version__)"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc /Qp "/DAppVersion=$v" installer.iss
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python build.py --onefile
+          Move-Item "dist/Reel to MP3.exe" "dist/Reel-to-MP3-Windows-Portable.exe"
+          New-Item -ItemType Directory out | Out-Null
+          Move-Item dist/Reel-to-MP3-Setup.exe, dist/Reel-to-MP3-Windows-Portable.exe out/
 
-      - name: Package (Mac)
+      - name: Mac disk image
         if: runner.os == 'macOS'
         run: |
-          mkdir dmg
+          mkdir dmg out
           ditto "dist/Reel to MP3.app" "dmg/Reel to MP3.app"
           ln -s /Applications dmg/Applications
           for i in 1 2 3 4 5; do
-            hdiutil create -volname "Reel to MP3" -srcfolder dmg -ov -format UDZO "dist/${{ matrix.asset }}" && break
+            hdiutil create -volname "Reel to MP3" -srcfolder dmg -ov -format UDZO "out/${{ matrix.dmg }}" && break
             sleep 5
           done
-          test -f "dist/${{ matrix.asset }}"
+          test -f "out/${{ matrix.dmg }}"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: dist/${{ matrix.asset }}
+          name: ${{ matrix.name }}
+          path: out/*
 
   release:
     needs: build
@@ -73,10 +91,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > notes.md <<'EOF'
-          **Windows:** download `Reel-to-MP3-Windows.exe` and double-click it. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+          ### Windows
+          Download **Reel-to-MP3-Setup.exe** and run it. It adds Reel to MP3 to your Start menu (and desktop, if you tick the box).
+          If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+          Prefer no install? Use **Reel-to-MP3-Windows-Portable.exe** instead.
 
-          **Mac:** download the `.dmg` for your Mac (Apple menu → About This Mac: **Chip: Apple M…** = AppleSilicon, **Processor: Intel** = Intel). Open it and drag **Reel to MP3** into **Applications**.
-          The first time you open it, macOS will say it can't check it for malware. Click **Done**, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only need to do this once.
+          ### Mac
+          Download the `.dmg` for your Mac (Apple menu → About This Mac: **Chip: Apple M…** → AppleSilicon, **Processor: Intel** → Intel).
+          Open it and drag **Reel to MP3** into **Applications**.
+          The first time you open it, macOS says it can't check it for malware. Click **Done**, then open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only need to do this once.
+
+          Reel to MP3 checks for new versions when it starts and tells you when one is available.
           EOF
           ls -la out
           gh release create "${GITHUB_REF_NAME}" out/* --repo "${GITHUB_REPOSITORY}" \

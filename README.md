@@ -1,31 +1,42 @@
-# Reel to MP3
+<p align="center"><img src="assets/icon.png" width="96" alt=""></p>
 
-Paste an Instagram Reel link and get its audio as an MP3. Runs on your own computer: the app opens a page in your web browser where you paste links, play the results and pick the folder they're saved in.
+<h1 align="center">Reel to MP3</h1>
 
-## Download
+<p align="center">Paste an Instagram Reel link and get its audio as an MP3, with the title, artist and cover art already filled in.<br>A desktop app for Windows and Mac. Everything runs on your own computer.</p>
 
-Get the latest version from the **[Releases page](../../releases/latest)**.
+<p align="center"><a href="../../releases/latest"><b>Download the latest version</b></a></p>
 
-**Windows:** download `Reel-to-MP3-Windows.exe` and double-click it. If Windows shows "Windows protected your PC", click **More info → Run anyway**.
+## Features
+
+- **Paste and go:** paste a link, click Convert, done. Press Ctrl+V (⌘V on Mac) anywhere in the window to convert straight away, or paste several links at once.
+- **Proper MP3s:** each file gets the Reel's caption as its title, the creator as the artist, and the Reel's thumbnail as cover art.
+- **Built-in library and player:** browse, search, play, show in folder, or move to the Recycle Bin / Trash.
+- **Your choice of quality:** 128, 192 or 320 kbps, saved to any folder you pick.
+- **Update notices:** the app tells you when a new version is out.
+- **Light and dark mode:** follows your system.
+
+## Install
+
+**Windows:** download **Reel-to-MP3-Setup.exe** from the [Releases page](../../releases/latest) and run it. It adds Reel to MP3 to the Start menu. If Windows shows "Windows protected your PC", click **More info → Run anyway**. Prefer not to install? Use **Reel-to-MP3-Windows-Portable.exe** instead.
 
 **Mac:** download the `.dmg` that matches your Mac (Apple menu → About This Mac: *Chip: Apple M…* → **AppleSilicon**, *Processor: Intel* → **Intel**). Open it and drag **Reel to MP3** into **Applications**. The first time you open it, macOS says it can't verify the app. Click **Done**, open **System Settings → Privacy & Security**, scroll down and click **Open Anyway**. You only need to do this once.
 
-## Using it
+## Tips
 
-1. Open Reel to MP3. A small window appears and the app opens in your browser. Keep the small window open while you use it. Closing it quits the app.
-2. Paste one or more Reel links (one per line) and click **Download MP3**.
-3. MP3s are saved in `Music/Reels` by default. Change the folder under **Your MP3s**.
-
-If a reel fails with "login required", set **Login cookies** to the browser where you're logged into Instagram, then try again. On a Mac, Safari needs Full Disk Access for this (System Settings → Privacy & Security → Full Disk Access), so Chrome or Firefox is easier.
+- MP3s are saved in `Music/Reels` by default. Change it in **Settings** (the sliders icon, top right).
+- If a Reel says you need to log in, open **Settings → Instagram login** and pick the browser where you're logged into Instagram. On a Mac, Safari needs Full Disk Access for this, so Chrome or Firefox is easier.
+- If Instagram changes something and downloads stop working, a new release usually fixes it.
 
 ## Building
 
-The apps are built by GitHub Actions (`.github/workflows/build.yml`). Push a tag such as `v1.0.1` to build and publish a new release. Rebuilding also picks up the newest yt-dlp, which fixes most "it stopped working" problems with Instagram.
+GitHub Actions builds the apps (`.github/workflows/build.yml`). Bump `version.py`, then push a matching tag (for example `v1.2.0`) to build and publish a release. Each build also picks up the newest yt-dlp.
 
-To build the Windows app locally:
+Windows, locally:
 
 ```
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt pyinstaller pillow
 .venv\Scripts\python build.py
 ```
+
+The app is `app.py` (window), `server.py` (local server, only reachable from this computer) and `web/` (the interface). Downloads use [yt-dlp](https://github.com/yt-dlp/yt-dlp) and [FFmpeg](https://ffmpeg.org).

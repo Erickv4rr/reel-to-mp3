@@ -5,217 +5,173 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reel to MP3</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-<style>
-  :root {
-    --bg: #f6f6f8; --card: #ffffff; --text: #17171c; --muted: #6b6b76; --line: #e4e4ea;
-    --accent: #dd2a7b; --accent-2: #8134af; --ok: #1f9d55; --err: #d64545; --field: #fbfbfd;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #111114; --card: #1b1b20; --text: #ececf1; --muted: #9a9aa6; --line: #2c2c34;
-      --ok: #3ccf7a; --err: #ff6b6b; --field: #15151a;
-    }
-  }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text);
-         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
-  header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; }
-  header img { width: 40px; height: 40px; }
-  h1 { font-size: 22px; margin: 0; }
-  header p { margin: 0; color: var(--muted); font-size: 13px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-bottom: 18px; }
-  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
-  textarea { width: 100%; min-height: 84px; resize: vertical; padding: 10px 12px; border-radius: 10px;
-             border: 1px solid var(--line); background: var(--field); color: var(--text); font: inherit; }
-  textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 12px; }
-  .grow { flex: 1; }
-  label { color: var(--muted); font-size: 13px; }
-  select { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--field); color: var(--text); font: inherit; }
-  button { font: inherit; cursor: pointer; border-radius: 10px; padding: 9px 16px; border: 1px solid var(--line);
-           background: var(--field); color: var(--text); }
-  button:hover { border-color: var(--muted); }
-  button.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border: none; font-weight: 600; }
-  button.primary:disabled { opacity: .6; cursor: default; }
-  button.small { padding: 5px 10px; font-size: 13px; border-radius: 8px; }
-  .msg { font-size: 13px; color: var(--err); min-height: 1em; }
-  .job { display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
-  .job:first-of-type { border-top: none; }
-  .job .url { font-size: 13px; word-break: break-all; }
-  .job .detail { font-size: 12px; color: var(--muted); word-break: break-word; }
-  .job.error .detail { color: var(--err); }
-  .dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 4px; }
-  .running .dot { border: 2px solid var(--accent); border-top-color: transparent; animation: spin 0.8s linear infinite; }
-  .done .dot { background: var(--ok); }
-  .error .dot { background: var(--err); }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .file { padding: 12px 0; border-top: 1px solid var(--line); }
-  .file:first-of-type { border-top: none; }
-  .file .name { font-weight: 500; word-break: break-word; }
-  .file .meta { font-size: 12px; color: var(--muted); }
-  .file audio { width: 100%; height: 36px; margin-top: 8px; }
-  .file .actions { display: flex; gap: 6px; margin-top: 6px; }
-  .empty { color: var(--muted); font-size: 14px; }
-  .head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
-  .head h2 { margin: 0; }
-  .folderRow { margin: 4px 0 0; }
-  .folderRow input { min-width: 0; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line);
-                     background: var(--field); color: var(--text); font: 13px Consolas, monospace; }
-  .folderRow input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .msg.ok { color: var(--ok); }
-  @media (max-width: 520px) { .folderRow input { flex-basis: 100%; } }
-  #offline { display: none; background: var(--err); color: #fff; padding: 10px 14px; border-radius: 10px; margin-bottom: 18px; font-size: 14px; }
-</style>
+<link rel="stylesheet" href="/app.css">
 </head>
 <body>
-<main>
-  <header>
-    <img src="/favicon.svg" alt="">
-    <div>
-      <h1>Reel to MP3</h1>
-      <p>Paste an Instagram Reel link and get the audio as an MP3.</p>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-paste" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-reveal" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6M9 13l3-3 3 3"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 19.2V4.8a.8.8 0 0 0-1.25-.66L7 11.34a.8.8 0 0 0 0 1.32l9.75 7.2a.8.8 0 0 0 1.25-.66Z" fill="currentColor" stroke="none"/><path d="M5 5v14"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 4.8v14.4a.8.8 0 0 0 1.25.66L17 12.66a.8.8 0 0 0 0-1.32L7.25 4.14A.8.8 0 0 0 6 4.8Z" fill="currentColor" stroke="none"/><path d="M19 5v14"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="m22 9-6 6M16 9l6 6"/></symbol>
+  <symbol id="i-external" viewBox="0 0 24 24"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5M12 16.2h.01"/></symbol>
+  <symbol id="i-sparkle" viewBox="0 0 24 24"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8"/></symbol>
+</svg>
+
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <img src="/favicon.svg" alt="" class="logo">
+      <span class="name">Reel to MP3</span>
     </div>
+    <button class="icon-btn" id="openSettings" title="Settings" aria-label="Settings"><svg><use href="#i-settings"/></svg></button>
   </header>
 
-  <div id="offline">Can't reach Reel to MP3. Open the Reel to MP3 app, then reload this page.</div>
+  <div class="update" id="update" hidden>
+    <svg><use href="#i-sparkle"/></svg>
+    <span>Version <b id="updateVersion"></b> is available.</span>
+    <button class="link-btn" id="updateGet">Get the update <svg><use href="#i-external"/></svg></button>
+  </div>
 
-  <section class="card">
-    <h2>Links</h2>
-    <textarea id="urls" placeholder="https://www.instagram.com/reel/...&#10;One link per line"></textarea>
-    <div class="row">
-      <label for="cookies">Login cookies</label>
-      <select id="cookies"><option value="none">none</option></select>
-      <span class="grow"></span>
-      <button class="primary" id="go">Download MP3</button>
+  <main class="content" id="content">
+    <section class="hero">
+      <h1>Turn any Reel into an MP3</h1>
+      <p class="sub">Paste a link from Instagram. The audio is saved with the title, artist and cover art.</p>
+      <form class="convert" id="convertForm" autocomplete="off">
+        <div class="field">
+          <svg class="field-icon"><use href="#i-link"/></svg>
+          <input id="url" type="text" spellcheck="false" placeholder="https://www.instagram.com/reel/…" aria-label="Instagram link">
+          <button type="button" class="ghost-btn" id="paste" title="Paste from clipboard"><svg><use href="#i-paste"/></svg><span>Paste</span></button>
+        </div>
+        <button type="submit" class="primary" id="go">Convert</button>
+      </form>
+      <div class="hint-row">
+        <span class="msg" id="msg" role="status"></span>
+        <button class="chip" id="qualityChip" title="Change audio quality">MP3 · <span id="qualityText">192</span> kbps</button>
+      </div>
+    </section>
+
+    <section class="panel" id="queuePanel" hidden>
+      <div class="panel-head">
+        <h2>In progress</h2>
+        <button class="link-btn" id="clearJobs">Clear finished</button>
+      </div>
+      <div id="queue" class="list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Library <span class="count" id="count"></span></h2>
+        <div class="panel-tools">
+          <label class="search">
+            <svg><use href="#i-search"/></svg>
+            <input id="search" type="search" placeholder="Search" aria-label="Search library">
+          </label>
+          <button class="ghost-btn" id="openFolder" title="Open the MP3 folder"><svg><use href="#i-folder"/></svg><span>Open folder</span></button>
+        </div>
+      </div>
+      <div id="library" class="list"></div>
+      <div class="empty" id="empty" hidden>
+        <div class="empty-art"><svg><use href="#i-music"/></svg></div>
+        <h3>No MP3s yet</h3>
+        <p>Converted Reels show up here. Copy a Reel link in Instagram, then press <kbd id="pasteKey">Ctrl</kbd> + <kbd>V</kbd> anywhere in this window.</p>
+      </div>
+      <div class="empty" id="noResults" hidden><p>Nothing matches your search.</p></div>
+    </section>
+  </main>
+
+  <footer class="player" id="player" hidden>
+    <div class="now">
+      <div class="art" id="pArt"></div>
+      <div class="meta">
+        <div class="title" id="pTitle"></div>
+        <div class="artist" id="pArtist"></div>
+      </div>
     </div>
-    <div class="row"><span class="msg" id="msg"></span></div>
-    <label>Set login cookies to the browser you use for Instagram only if a reel fails with "login required" or "empty media response".</label>
-  </section>
-
-  <section class="card" id="jobsCard" hidden>
-    <div class="head"><h2>Progress</h2><button class="small" id="clear">Clear finished</button></div>
-    <div id="jobs"></div>
-  </section>
-
-  <section class="card">
-    <div class="head"><h2>Your MP3s</h2><button class="small" id="openFolder">Open folder</button></div>
-    <div class="row folderRow">
-      <label for="folder">Save to</label>
-      <input id="folder" class="grow" spellcheck="false" placeholder="Folder where MP3s are saved">
-      <button class="small" id="pickFolder">Browse...</button>
-      <button class="small" id="saveFolder" hidden>Save</button>
+    <div class="controls">
+      <div class="buttons">
+        <button class="icon-btn" id="pPrev" title="Previous"><svg><use href="#i-prev"/></svg></button>
+        <button class="play-btn" id="pPlay" title="Play / pause"><svg><use href="#i-play"/></svg></button>
+        <button class="icon-btn" id="pNext" title="Next"><svg><use href="#i-next"/></svg></button>
+      </div>
+      <div class="seek">
+        <span id="pCur">0:00</span>
+        <input type="range" id="pSeek" min="0" max="1000" value="0" aria-label="Seek">
+        <span id="pDur">0:00</span>
+      </div>
     </div>
-    <div class="row" style="margin-top:4px"><span class="msg" id="folderMsg"></span></div>
-    <div id="files"><p class="empty">Nothing here yet.</p></div>
-  </section>
-</main>
+    <div class="volume">
+      <button class="icon-btn" id="pMute" title="Mute"><svg><use href="#i-volume"/></svg></button>
+      <input type="range" id="pVol" min="0" max="100" value="90" aria-label="Volume">
+    </div>
+    <audio id="audio" preload="metadata"></audio>
+  </footer>
+</div>
 
-<script>
-const $ = id => document.getElementById(id);
-const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const post = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body || {})});
+<div class="modal" id="settings" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="sheet-head">
+      <h2 id="settingsTitle">Settings</h2>
+      <button class="icon-btn" id="closeSettings" aria-label="Close"><svg><use href="#i-x"/></svg></button>
+    </div>
 
-try { const c = localStorage.getItem('cookies'); if (c) $('cookies').dataset.saved = c; } catch {}
+    <div class="setting">
+      <div class="setting-label">
+        <h3>Save MP3s to</h3>
+        <p>New downloads go into this folder.</p>
+      </div>
+      <div class="folder-box">
+        <code id="folderPath"></code>
+        <button class="ghost-btn" id="changeFolder">Change…</button>
+      </div>
+    </div>
 
-let fileSig = '';
-let anyRunning = false;
+    <div class="setting">
+      <div class="setting-label">
+        <h3>Audio quality</h3>
+        <p>Higher quality makes bigger files.</p>
+      </div>
+      <div class="segmented" id="bitrate">
+        <button data-v="128">Standard<small>128 kbps</small></button>
+        <button data-v="192">High<small>192 kbps</small></button>
+        <button data-v="320">Best<small>320 kbps</small></button>
+      </div>
+    </div>
 
-async function refreshJobs() {
-  const r = await fetch('/api/jobs').then(r => r.json());
-  const sel = $('cookies');
-  if (sel.options.length < 2) {
-    sel.innerHTML = r.browsers.map(b => `<option>${esc(b)}</option>`).join('');
-    if (sel.dataset.saved) sel.value = sel.dataset.saved;
-  }
-  $('jobsCard').hidden = r.jobs.length === 0;
-  $('jobs').innerHTML = r.jobs.map(j => `
-    <div class="job ${j.status}">
-      <div class="dot"></div>
+    <div class="setting">
+      <div class="setting-label">
+        <h3>Instagram login</h3>
+        <p>Only needed when a Reel says it needs you to log in. Pick the browser where you're logged into Instagram.</p>
+      </div>
+      <select id="cookies"></select>
+      <p class="note" id="cookieNote"></p>
+    </div>
+
+    <div class="about">
+      <img src="/favicon.svg" alt="" class="logo">
       <div>
-        <div class="url">${esc(j.url)}</div>
-        <div class="detail">${esc(j.status === 'done' ? 'Saved: ' + j.file : j.status === 'error' ? j.error : j.last || 'Starting...')}</div>
+        <b>Reel to MP3</b> <span id="version"></span>
+        <p>Made with yt-dlp and FFmpeg. Downloads run on this computer.</p>
       </div>
-    </div>`).join('');
-  const wasRunning = anyRunning;
-  anyRunning = r.jobs.some(j => j.status === 'running');
-  $('go').disabled = false;
-  if (wasRunning && !anyRunning) refreshFiles();
-}
+      <button class="link-btn" id="releases">Releases <svg><use href="#i-external"/></svg></button>
+    </div>
+  </div>
+</div>
 
-async function refreshFiles() {
-  const r = await fetch('/api/files').then(r => r.json());
-  if (document.activeElement !== $('folder') && $('saveFolder').hidden) $('folder').value = r.folder;
-  savedFolder = r.folder;
-  const sig = r.folder + '|' + r.files.map(f => f.name + f.mtime).join('|');
-  if (sig === fileSig) return;
-  fileSig = sig;
-  if (!r.files.length) { $('files').innerHTML = '<p class="empty">Nothing here yet.</p>'; return; }
-  $('files').innerHTML = r.files.map(f => {
-    const src = '/files/' + encodeURIComponent(f.name);
-    const when = new Date(f.mtime * 1000).toLocaleString();
-    return `<div class="file">
-      <div class="name">${esc(f.name.replace(/\.mp3$/i, ''))}</div>
-      <div class="meta">${(f.size / 1048576).toFixed(1)} MB · ${esc(when)}</div>
-      <audio controls preload="none" src="${src}"></audio>
-      <div class="actions">
-        <a href="${src}?dl=1"><button class="small">Download</button></a>
-        <button class="small" data-del="${esc(f.name)}">Delete</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-$('go').onclick = async () => {
-  $('msg').textContent = '';
-  const urls = $('urls').value.trim();
-  if (!urls) { $('msg').textContent = 'Paste a link first.'; return; }
-  try { localStorage.setItem('cookies', $('cookies').value); } catch {}
-  $('go').disabled = true;
-  const r = await post('/api/download', {urls, cookies: $('cookies').value});
-  const data = await r.json();
-  if (!r.ok) { $('msg').textContent = data.error; $('go').disabled = false; return; }
-  $('urls').value = '';
-  anyRunning = true;
-  refreshJobs();
-};
-
-let savedFolder = '';
-function folderStatus(text, ok) { $('folderMsg').textContent = text; $('folderMsg').className = 'msg' + (ok ? ' ok' : ''); }
-async function changeFolder(body) {
-  folderStatus(body.pick ? 'Choose a folder in the window that just opened...' : '', true);
-  const r = await post('/api/folder', body);
-  const data = await r.json();
-  if (!r.ok) { folderStatus(data.error); return; }
-  $('folder').value = data.folder;
-  $('saveFolder').hidden = true;
-  folderStatus(data.cancelled ? '' : 'New MP3s will be saved here.', true);
-  if (!data.cancelled) refreshFiles();
-}
-$('folder').addEventListener('input', () => { $('saveFolder').hidden = $('folder').value.trim() === savedFolder; folderStatus(''); });
-$('folder').addEventListener('keydown', e => { if (e.key === 'Enter') $('saveFolder').click(); });
-$('saveFolder').onclick = () => changeFolder({path: $('folder').value});
-$('pickFolder').onclick = () => changeFolder({pick: true});
-
-$('urls').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) $('go').click(); });
-$('clear').onclick = () => post('/api/clear-jobs').then(refreshJobs);
-$('openFolder').onclick = () => post('/api/open-folder');
-$('files').onclick = async e => {
-  const name = e.target.dataset.del;
-  if (!name || !confirm('Delete "' + name + '"?')) return;
-  await post('/api/delete', {name});
-  refreshFiles();
-};
-
-async function tick() {
-  try {
-    await refreshJobs();
-    $('offline').style.display = 'none';
-  } catch { $('offline').style.display = 'block'; }
-  setTimeout(tick, anyRunning ? 1000 : 4000);
-}
-refreshFiles().catch(() => {});
-tick();
-</script>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="/app.js"></script>
 </body>
 </html>

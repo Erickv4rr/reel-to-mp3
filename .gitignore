@@ -6,3 +6,4 @@ bin/
 config.json
 *.spec
 build.log
+.claude/

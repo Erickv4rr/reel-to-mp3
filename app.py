@@ -1,127 +1,112 @@
 """Reel to MP3 desktop app.
 
-Starts the local Reel to MP3 server, opens it in your default browser, and shows a
-small window that keeps it running. Closing the window quits the app.
-This is the file that gets packaged into the Windows .exe and the Mac .app.
+Runs the local Reel to MP3 server and shows it in the app's own window
+(Edge WebView2 on Windows, WebKit on macOS). If that window can't be created,
+it falls back to opening the page in the default browser.
+This is the file that gets packaged into the Windows and Mac apps.
 """
-import json
 import os
-import queue
+import subprocess
+import sys
 import threading
-import urllib.request
 import webbrowser
-from http.server import ThreadingHTTPServer
-
-import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
 
 import server
-from reel_to_mp3 import RES_DIR, open_path
+from reel_to_mp3 import IS_MAC, IS_WIN, RES_DIR, USER_DIR, open_path
+from version import APP_NAME
 
 PORTS = list(range(8765, 8776)) + [0]  # 0 = any free port
 
 
-def already_running(port):
-    """True if another Reel to MP3 is already serving on this port."""
+def dark_mode():
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/jobs", timeout=1) as r:
-            return "browsers" in json.load(r)
+        if IS_WIN:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                                 r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+            return winreg.QueryValueEx(key, "AppsUseLightTheme")[0] == 0
+        if IS_MAC:
+            out = subprocess.run(["defaults", "read", "-g", "AppleInterfaceStyle"],
+                                 capture_output=True, text=True, timeout=2).stdout
+            return "dark" in out.lower()
+    except Exception:
+        pass
+    return False
+
+
+def run_in_window(url):
+    """Show the app in its own native window. Returns False if that isn't possible."""
+    try:
+        import webview
     except Exception:
         return False
 
+    if IS_WIN:
+        try:  # own taskbar entry and icon instead of python's
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ReelToMP3.App")
+        except Exception:
+            pass
 
-def start_server():
-    ports = [int(os.environ["REEL_PORT"])] if os.environ.get("REEL_PORT") else PORTS
-    for port in ports:
-        try:
-            return ThreadingHTTPServer((server.HOST, port), server.Handler)
-        except OSError:
-            continue
-    raise SystemExit("Reel to MP3 could not find a free network port.")
+    window = webview.create_window(
+        APP_NAME, url, width=1060, height=800, min_size=(720, 560),
+        background_color="#0F0F13" if dark_mode() else "#F4F4F7", text_select=True)
+
+    folder_dialog = getattr(getattr(webview, "FileDialog", None), "FOLDER", None)
+    if folder_dialog is None:
+        folder_dialog = webview.FOLDER_DIALOG
+
+    def pick(initial):
+        result = window.create_file_dialog(folder_dialog, directory=initial)
+        return (result or [""])[0]
+
+    server.folder_picker = pick
+    try:
+        USER_DIR.mkdir(parents=True, exist_ok=True)
+        webview.start(private_mode=False, storage_path=str(USER_DIR / "webview"))
+    except Exception:
+        return False
+    return True
 
 
-def main():
-    if not os.environ.get("REEL_PORT") and already_running(PORTS[0]):
-        webbrowser.open(f"http://localhost:{PORTS[0]}")
-        return
-
-    httpd = start_server()
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    url = f"http://localhost:{httpd.server_port}"
+def run_in_browser(url):
+    """Fallback: open the page in the browser and keep a small control window open."""
+    import tkinter as tk
+    from tkinter import ttk
 
     root = tk.Tk()
-    root.title("Reel to MP3")
+    root.title(APP_NAME)
     root.resizable(False, False)
     icon_file = RES_DIR / "assets" / "icon.png"
     if icon_file.is_file():
         try:
-            icon = tk.PhotoImage(file=str(icon_file))
-            root.iconphoto(True, icon)
-            small = icon.subsample(max(1, icon.width() // 64))
+            root.iconphoto(True, tk.PhotoImage(file=str(icon_file)))
         except tk.TclError:
-            small = None
-    else:
-        small = None
-
+            pass
     frm = ttk.Frame(root, padding=18)
     frm.pack(fill="both", expand=True)
-    top = ttk.Frame(frm)
-    top.pack(fill="x")
-    if small:
-        ttk.Label(top, image=small).pack(side="left", padx=(0, 12))
-    text = ttk.Frame(top)
-    text.pack(side="left", fill="x")
-    ttk.Label(text, text="Reel to MP3 is running", font=("TkDefaultFont", 13, "bold")).pack(anchor="w")
-    ttk.Label(text, text="It opens in your web browser.\nKeep this window open while you use it.",
+    ttk.Label(frm, text=f"{APP_NAME} is running", font=("TkDefaultFont", 13, "bold")).pack(anchor="w")
+    ttk.Label(frm, text="It opened in your web browser.\nKeep this window open while you use it.",
               justify="left").pack(anchor="w")
-
     btns = ttk.Frame(frm)
-    btns.pack(fill="x", pady=(16, 0))
-    ttk.Button(btns, text="Open Reel to MP3", command=lambda: webbrowser.open(url)).pack(side="left")
-    ttk.Button(btns, text="Open MP3 folder",
-               command=lambda: (server.OUT_DIR.mkdir(parents=True, exist_ok=True), open_path(server.OUT_DIR))
-               ).pack(side="left", padx=8)
-    ttk.Label(frm, text=url, foreground="gray").pack(anchor="w", pady=(10, 0))
-
-    # Folder picker requests from the web page are answered here, on the Tk main thread
-    # (required on macOS, and keeps the dialog on top of this window everywhere).
-    picks = queue.Queue()
-
-    def threaded_picker(initial):
-        done, result = threading.Event(), {}
-        picks.put((initial, result, done))
-        done.wait()
-        return result.get("path", "")
-
-    def pump():
-        while not picks.empty():
-            initial, result, done = picks.get()
-            try:
-                root.deiconify()
-                root.lift()
-                root.attributes("-topmost", True)
-                result["path"] = filedialog.askdirectory(parent=root, initialdir=initial,
-                                                         title="Choose where Reel to MP3 saves files")
-            finally:
-                root.attributes("-topmost", False)
-                done.set()
-        root.after(150, pump)
-
-    server.folder_picker = threaded_picker
-
-    def quit_app():
-        with server.jobs_lock:
-            busy = any(j["status"] == "running" for j in server.jobs.values())
-        if busy and not messagebox.askyesno("Reel to MP3", "A download is still running. Quit anyway?"):
-            return
-        httpd.shutdown()
-        root.destroy()
-
-    root.protocol("WM_DELETE_WINDOW", quit_app)
-    root.createcommand("::tk::mac::Quit", quit_app)  # Cmd+Q on macOS (ignored elsewhere)
-    root.after(150, pump)
-    root.after(400, lambda: webbrowser.open(url))
+    btns.pack(fill="x", pady=(14, 0))
+    ttk.Button(btns, text=f"Open {APP_NAME}", command=lambda: webbrowser.open(url)).pack(side="left")
+    ttk.Button(btns, text="Open MP3 folder", command=lambda: open_path(server.OUT_DIR)).pack(side="left", padx=8)
+    root.after(300, lambda: webbrowser.open(url))
     root.mainloop()
+
+
+def main():
+    ports = [int(os.environ["REEL_PORT"])] if os.environ.get("REEL_PORT") else PORTS
+    httpd = server.make_server(ports)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    threading.Thread(target=server.check_for_update, daemon=True).start()
+    url = f"http://localhost:{httpd.server_port}/"
+
+    if os.environ.get("REEL_BROWSER") or not run_in_window(url):
+        run_in_browser(url)
+    httpd.shutdown()
+    sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ import queue
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
@@ -23,6 +24,7 @@ except ImportError:
     pass
 
 import yt_dlp  # noqa: E402
+from yt_dlp.postprocessor.metadataparser import MetadataParserPP  # noqa: E402
 
 APP_DIR = Path(__file__).resolve().parent
 # Where bundled files (web/, bin/) live: the unpacked bundle when frozen, else this folder.
@@ -34,6 +36,8 @@ if IS_MAC:
 else:
     BROWSERS = ["none", "opera", "firefox", "edge", "chrome", "brave"]
     USER_DIR = Path(os.environ.get("APPDATA") or Path.home()) / "Reel to MP3"
+if os.environ.get("REEL_USER_DIR"):  # separate settings for testing
+    USER_DIR = Path(os.environ["REEL_USER_DIR"])
 
 
 def find_ffmpeg():
@@ -64,10 +68,40 @@ def open_path(path):
         subprocess.Popen(["xdg-open", path])
 
 
-def download_mp3(url, out_dir, cookies_browser=None, bitrate="192", log=print):
-    """Download one reel and convert its audio to MP3. Returns the MP3 path."""
+def reveal_path(path):
+    """Show a file selected in Explorer / Finder."""
+    path = str(path)
+    if IS_WIN:
+        subprocess.Popen(["explorer", "/select,", path])
+    elif IS_MAC:
+        subprocess.Popen(["open", "-R", path])
+    else:
+        subprocess.Popen(["xdg-open", str(Path(path).parent)])
+
+
+def download_mp3(url, out_dir, cookies_browser=None, bitrate="192", log=print, progress=None):
+    """Download one reel and convert its audio to an MP3 with title, artist and cover art.
+
+    progress, if given, is called with dicts like {"stage": "downloading", "percent": 42.0,
+    "title": ..., "uploader": ..., "thumbnail": ...}. Returns the MP3 path.
+    """
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    report = progress or (lambda d: None)
+    # Work in a temp folder so failed downloads never leave video/thumbnail files behind.
+    work = Path(tempfile.mkdtemp(prefix="reel-to-mp3-"))
+    try:
+        mp3 = _download(url, work, cookies_browser, bitrate, log, report)
+        dest = out_dir / mp3.name
+        if dest.exists():
+            dest.unlink()
+        shutil.move(str(mp3), str(dest))
+        return dest
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def _download(url, work, cookies_browser, bitrate, log, report):
 
     class Logger:
         def debug(self, msg):
@@ -83,28 +117,81 @@ def download_mp3(url, out_dir, cookies_browser=None, bitrate="192", log=print):
         def error(self, msg):
             log("ERROR: " + msg)
 
+    def on_download(d):
+        info = d.get("info_dict") or {}
+        meta = {k: info.get(k) for k in ("title", "uploader", "thumbnail") if info.get(k)}
+        if d["status"] == "downloading":
+            total = d.get("total_bytes") or d.get("total_bytes_estimate")
+            pct = (d.get("downloaded_bytes", 0) / total * 100) if total else None
+            report({"stage": "downloading", "percent": pct, **meta})
+        elif d["status"] == "finished":
+            report({"stage": "converting", "percent": None, **meta})
+
+    def on_postprocess(d):
+        if d["status"] == "started":
+            report({"stage": "converting", "percent": None})
+
     opts = {
         "format": "bestaudio/best",
-        "outtmpl": str(out_dir / "%(uploader|instagram)s - %(title).80B [%(id)s].%(ext)s"),
+        "outtmpl": str(work / "%(uploader|Instagram)s - %(title).80B [%(id)s].%(ext)s"),
         "windowsfilenames": True,
         "noplaylist": True,
         "ffmpeg_location": find_ffmpeg(),
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": bitrate,
-        }],
+        "writethumbnail": True,
+        "postprocessors": [
+            # Use the first line of the caption as the title ("Video by x" otherwise).
+            {"key": "MetadataParser", "when": "pre_process", "actions": [
+                (MetadataParserPP.Actions.INTERPRET, "description",
+                 r"(?s)^\s*(?P<title>[^\n#@]{3,80}?)\s*(?:[\n#@]|$)")]},
+            {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": str(bitrate)},
+            {"key": "FFmpegMetadata", "add_metadata": True},
+            {"key": "EmbedThumbnail", "already_have_thumbnail": False},
+        ],
+        "progress_hooks": [on_download],
+        "postprocessor_hooks": [on_postprocess],
         "logger": Logger(),
         "noprogress": True,
     }
     if cookies_browser and cookies_browser != "none":
         opts["cookiesfrombrowser"] = (cookies_browser,)
 
+    report({"stage": "starting", "percent": None})
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=True)
         if "entries" in info:  # carousel / multi-video post: take the first video
             info = next(e for e in info["entries"] if e)
         return Path(ydl.prepare_filename(info)).with_suffix(".mp3")
+
+
+def read_tags(path):
+    """Title, artist, duration (s) and whether there is cover art, from an MP3's ID3 tags."""
+    out = {"title": None, "artist": None, "duration": None, "cover": False}
+    try:
+        from mutagen.mp3 import MP3
+        audio = MP3(str(path))
+        out["duration"] = round(audio.info.length, 1)
+        tags = audio.tags or {}
+        if "TIT2" in tags:
+            out["title"] = str(tags["TIT2"])
+        if "TPE1" in tags:
+            out["artist"] = str(tags["TPE1"])
+        out["cover"] = any(k.startswith("APIC") for k in tags.keys())
+    except Exception:
+        pass
+    return out
+
+
+def read_cover(path):
+    """(bytes, mime) of the MP3's embedded cover art, or None."""
+    try:
+        from mutagen.mp3 import MP3
+        tags = MP3(str(path)).tags or {}
+        for k in tags.keys():
+            if k.startswith("APIC"):
+                return tags[k].data, tags[k].mime or "image/jpeg"
+    except Exception:
+        pass
+    return None
 
 
 def run_gui():
